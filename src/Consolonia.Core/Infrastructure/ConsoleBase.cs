@@ -12,6 +12,7 @@ using Avalonia.Input.Raw;
 using Avalonia.Threading;
 using Consolonia.Controls;
 using Consolonia.Core.Drawing.PixelBufferImplementation;
+using Consolonia.Core.Helpers.InputProcessing;
 using Consolonia.Core.Text;
 
 namespace Consolonia.Core.Infrastructure
@@ -31,6 +32,10 @@ namespace Consolonia.Core.Infrastructure
             new(@"\e\[4;(\d{1,5});(\d{1,5})t", RegexOptions.CultureInvariant);
 
         private readonly IConsoleOutput _consoleOutput;
+
+        // some terminals (e.g. Gnome Terminal) report every pointer movement in CSI ? 1003 h mode,
+        // including movements inside the same cell, which floods consumers with identical positions (#728)
+        private readonly DuplicateMoveFilter _duplicateMoveFilter = new();
 
         /// <summary>The cell size the terminal reported, unrounded; empty when it reported none.</summary>
         private Size _reportedCellPixelSize;
@@ -103,6 +108,9 @@ namespace Consolonia.Core.Infrastructure
         protected void RaiseMouseEvent(RawPointerEventType eventType, Point point, Vector? wheelDelta,
             RawInputModifiers modifiers)
         {
+            if (!_duplicateMoveFilter.Passes(eventType, point, modifiers))
+                return;
+
             // System.Diagnostics.Debug.WriteLine($"Mouse event: {eventType} [{point}] {wheelDelta} {modifiers}");
             MouseEvent?.Invoke(eventType, point, wheelDelta, modifiers);
         }
